@@ -1,0 +1,109 @@
+<UserControl x:Class="BamboozClipStudio.Views.FiltersPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             Width="270">
+
+    <UserControl.Resources>
+        <Style x:Key="FilterLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,0,2"/>
+        </Style>
+        <Style x:Key="FilterValue" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="Width" Value="36"/>
+            <Setter Property="TextAlignment" Value="Right"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Background="{StaticResource PanelBg}"
+            BorderBrush="{StaticResource Border}"
+            BorderThickness="1,0,0,0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Border Grid.Row="0" Background="{StaticResource ToolbarBg}" Padding="14,10">
+                <Grid>
+                    <TextBlock Text="Filters" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                    <Button Style="{StaticResource IconButton}"
+                            Command="{Binding CloseCommand}"
+                            HorizontalAlignment="Right" Padding="4" ToolTip="Close">
+                        <TextBlock Text="✕" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Filter sliders -->
+            <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="14,8">
+
+                    <!-- Saturation -->
+                    <Grid Margin="0,6,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FilterLabel}" Text="Saturation"/>
+                        <TextBlock Grid.Column="1" Style="{StaticResource FilterValue}" Text="{Binding Preset.Saturation, StringFormat=F2}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="3" Value="{Binding Preset.Saturation}" TickFrequency="0.1" IsSnapToTickEnabled="False" Margin="0,2,0,0"/>
+
+                    <!-- Vibrance -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FilterLabel}" Text="Vibrance"/>
+                        <TextBlock Grid.Column="1" Style="{StaticResource FilterValue}" Text="{Binding Preset.Vibrance, StringFormat=F2}"/>
+                    </Grid>
+                    <Slider Minimum="-1" Maximum="1" Value="{Binding Preset.Vibrance}" Margin="0,2,0,0"/>
+
+                    <!-- Brightness -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FilterLabel}" Text="Brightness"/>
+                        <TextBlock Grid.Column="1" Style="{StaticResource FilterValue}" Text="{Binding Preset.Brightness, StringFormat=F2}"/>
+                    </Grid>
+                    <Slider Minimum="-1" Maximum="1" Value="{Binding Preset.Brightness}" Margin="0,2,0,0"/>
+
+                    <!-- Contrast -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FilterLabel}" Text="Contrast"/>
+                        <TextBlock Grid.Column="1" Style="{StaticResource FilterValue}" Text="{Binding Preset.Contrast, StringFormat=F2}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="3" Value="{Binding Preset.Contrast}" Margin="0,2,0,0"/>
+
+                    <!-- Sharpness -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FilterLabel}" Text="Sharpness"/>
+                        <TextBlock Grid.Column="1" Style="{StaticResource FilterValue}" Text="{Binding Preset.Sharpness, StringFormat=F2}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="5" Value="{Binding Preset.Sharpness}" Margin="0,2,0,0"/>
+
+                    <!-- Gamma -->
+                    <Grid Margin="0,10,0,0">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FilterLabel}" Text="Gamma"/>
+                        <TextBlock Grid.Column="1" Style="{StaticResource FilterValue}" Text="{Binding Preset.Gamma, StringFormat=F2}"/>
+                    </Grid>
+                    <Slider Minimum="0.1" Maximum="4" Value="{Binding Preset.Gamma}" Margin="0,2,0,0"/>
+
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- Reset button -->
+            <Border Grid.Row="2" Padding="14,10"
+                    BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0">
+                <Button Style="{StaticResource SecondaryButton}"
+                        Content="Reset All Filters"
+                        Command="{Binding ResetCommand}"
+                        HorizontalAlignment="Stretch"/>
+            </Border>
+        </Grid>
+    </Border>
+</UserControl>

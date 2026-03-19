@@ -1,0 +1,177 @@
+<Window x:Class="BamboozClipStudio.Views.ExportDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:BamboozClipStudio.ViewModels"
+        Title="Export" Height="560" Width="460"
+        WindowStartupLocation="CenterOwner"
+        WindowStyle="None" ResizeMode="NoResize"
+        Background="{StaticResource PanelBg}"
+        BorderBrush="{StaticResource Border}" BorderThickness="1">
+
+    <Window.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            <Setter Property="Margin" Value="0,14,0,6"/>
+
+        </Style>
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="46"/>
+            <!-- Title bar -->
+            <RowDefinition Height="*"/>
+            <!-- Content -->
+            <RowDefinition Height="Auto"/>
+            <!-- Footer -->
+        </Grid.RowDefinitions>
+
+        <!-- Title bar -->
+        <Border Grid.Row="0" Background="{StaticResource ToolbarBg}"
+                MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+            <Grid Margin="16,0">
+                <TextBlock Text="Export" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                <Button Style="{StaticResource IconButton}"
+                        HorizontalAlignment="Right" Padding="6" Click="Close_Click">
+                    <TextBlock Text="✕" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                </Button>
+            </Grid>
+        </Border>
+
+        <!-- Content -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel Margin="20,4,20,12">
+
+                <!-- Output folder -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Output"/>
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Output Folder"/>
+                <Grid>
+                    <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                    <TextBox Grid.Column="0" Text="{Binding Settings.OutputFolder}" IsReadOnly="True"/>
+                    <Button Grid.Column="2" Style="{StaticResource SecondaryButton}"
+                            Content="Browse…" Padding="10,5"
+                            Command="{Binding BrowseFolderCommand}"/>
+                </Grid>
+
+                <!-- Format -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Format"/>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Container"/>
+                <ComboBox ItemsSource="{Binding ContainerOptions}"
+                          SelectedItem="{Binding Settings.Container}"/>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,4" Text="Video Codec"/>
+                <ComboBox ItemsSource="{Binding VideoCodecOptions}"
+                          SelectedItem="{Binding Settings.VideoCodec}"/>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,4" Text="Audio Codec"/>
+                <ComboBox ItemsSource="{Binding AudioCodecOptions}"
+                          SelectedItem="{Binding Settings.AudioCodec}"/>
+
+                <!-- Quality -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Quality"/>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Text="Preset"/>
+                <ComboBox ItemsSource="{Binding PresetOptions}"
+                          SelectedItem="{Binding Settings.Preset}"/>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,4" Text="Profile"/>
+                <ComboBox ItemsSource="{Binding ProfileOptions}"
+                          SelectedItem="{Binding Settings.Profile}"/>
+
+                <TextBlock Style="{StaticResource FieldLabel}" Margin="0,8,0,4" Text="Bitrate Mode"/>
+                <ComboBox ItemsSource="{Binding BitrateModeOptions}"
+                          SelectedIndex="{Binding Settings.BitrateMode, Converter={StaticResource EnumToIndex}}"/>
+
+                <!-- CRF slider -->
+                <StackPanel Visibility="{Binding IsCrf, Converter={StaticResource BoolToVis}}">
+                    <Grid Margin="0,8,0,4">
+                        <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource FieldLabel}" Text="CRF (lower = better quality)"/>
+                        <TextBlock Grid.Column="1" FontFamily="Consolas" FontSize="12"
+                                   Foreground="{StaticResource Accent}"
+                                   Text="{Binding Settings.Crf}"/>
+                    </Grid>
+                    <Slider Minimum="0" Maximum="51" IsSnapToTickEnabled="True" TickFrequency="1"
+                            Value="{Binding Settings.Crf}"/>
+                </StackPanel>
+
+                <!-- CBR bitrate -->
+                <StackPanel Visibility="{Binding IsCrf, Converter={StaticResource BoolToVis}}">
+                    <!-- hidden when CRF -->
+                </StackPanel>
+
+                <!-- Audio options -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Audio"/>
+                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                    <ToggleButton Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding Settings.MixAudioTracks}"
+                                  VerticalAlignment="Center"/>
+                    <StackPanel Margin="10,0,0,0">
+                        <TextBlock Text="Merge audio tracks" Foreground="{StaticResource TextPrimary}" FontSize="12"/>
+                        <TextBlock Text="Combines all tracks so Discord plays all audio"
+                                   Foreground="{StaticResource TextSecondary}" FontSize="10"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Upload option -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="Upload"/>
+                <StackPanel Orientation="Horizontal">
+                    <ToggleButton Style="{StaticResource ToggleSwitch}"
+                                  IsChecked="{Binding Settings.EmbedUpload}"
+                                  VerticalAlignment="Center"/>
+                    <StackPanel Margin="10,0,0,0">
+                        <TextBlock Text="Upload as embed link" Foreground="{StaticResource TextPrimary}" FontSize="12"/>
+                        <TextBlock Text="Upload to catbox.moe and copy Discord embed URL"
+                                   Foreground="{StaticResource TextSecondary}" FontSize="10"/>
+                    </StackPanel>
+                </StackPanel>
+
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Footer -->
+        <Border Grid.Row="2" Padding="20,12"
+                Background="{StaticResource ToolbarBg}"
+                BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+
+                <!-- Estimated size -->
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Estimated size" Foreground="{StaticResource TextSecondary}" FontSize="10"/>
+                    <TextBlock Text="{Binding EstimatedSize}"
+                               Foreground="{StaticResource TextPrimary}" FontSize="16" FontWeight="SemiBold"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <!-- Export progress (shown while exporting) -->
+                    <StackPanel Orientation="Horizontal" Margin="0,0,12,0"
+                                Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}">
+                        <ProgressBar Width="120" Value="{Binding ExportProgress}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <Button Style="{StaticResource SecondaryButton}" Content="Cancel"
+                                Command="{Binding CancelExportCommand}" Padding="10,5"/>
+                    </StackPanel>
+
+                    <Button Style="{StaticResource SecondaryButton}"
+                            Content="Cancel" Padding="12,7" Margin="0,0,8,0"
+                            Click="Cancel_Click"
+                            Visibility="{Binding IsExporting, Converter={StaticResource InverseBoolToVis}}"/>
+                    <Button Style="{StaticResource PrimaryButton}"
+                            Content="Export" Padding="20,7"
+                            Command="{Binding ExportCommand}"
+                            IsEnabled="{Binding IsExporting, Converter={StaticResource InverseBool}}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

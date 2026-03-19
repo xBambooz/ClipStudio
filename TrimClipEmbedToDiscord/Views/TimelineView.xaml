@@ -1,0 +1,196 @@
+<UserControl x:Class="BamboozClipStudio.Views.TimelineView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:BamboozClipStudio.ViewModels"
+             Background="{StaticResource TimelineBg}">
+
+    <UserControl.Resources>
+        <Style x:Key="TransportBtn" TargetType="Button" BasedOn="{StaticResource IconButton}">
+            <Setter Property="Width" Value="32"/>
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="6"/>
+            <Setter Property="Margin" Value="1,0"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <!-- Timeline canvas -->
+            <RowDefinition Height="40"/>
+            <!-- Transport bar -->
+        </Grid.RowDefinitions>
+
+        <!-- ═══ Timeline Canvas ═══ -->
+        <Border Grid.Row="0" BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,1">
+            <ScrollViewer x:Name="TimelineScroller"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled"
+                          PreviewMouseWheel="TimelineScroller_PreviewMouseWheel">
+                <Canvas x:Name="TimelineCanvas"
+                        Height="110"
+                        Background="{StaticResource TimelineBg}"
+                        MouseLeftButtonDown="Canvas_MouseLeftButtonDown"
+                        MouseMove="Canvas_MouseMove"
+                        MouseLeftButtonUp="Canvas_MouseLeftButtonUp"
+                        Cursor="Arrow">
+
+                    <!-- Thumbnail strip (dynamically added in code-behind) -->
+
+                    <!-- Active region highlight -->
+                    <Border x:Name="HighlightRegion"
+                            Canvas.Top="20" Height="70"
+                            Background="{StaticResource AccentAlphaBrush}"
+                            IsHitTestVisible="False"/>
+
+                    <!-- Ruler (drawn via code-behind DrawingVisual) -->
+                    <Canvas x:Name="RulerCanvas" Canvas.Top="0" Height="20"/>
+
+                    <!-- In handle -->
+                    <Border x:Name="InHandle"
+                            Canvas.Top="15" Width="12" Height="80"
+                            Background="{StaticResource Accent}"
+                            CornerRadius="3,0,0,3"
+                            Cursor="SizeWE"
+                            ToolTip="Drag to set In point"
+                            MouseLeftButtonDown="InHandle_MouseDown">
+                        <TextBlock Text="I" Foreground="{StaticResource TextOnAccent}"
+                                   FontSize="8" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                   Margin="0,0,0,2"/>
+                    </Border>
+
+                    <!-- Out handle -->
+                    <Border x:Name="OutHandle"
+                            Canvas.Top="15" Width="12" Height="80"
+                            Background="{StaticResource Accent}"
+                            CornerRadius="0,3,3,0"
+                            Cursor="SizeWE"
+                            ToolTip="Drag to set Out point"
+                            MouseLeftButtonDown="OutHandle_MouseDown">
+                        <TextBlock Text="O" Foreground="{StaticResource TextOnAccent}"
+                                   FontSize="8" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                                   Margin="0,0,0,2"/>
+                    </Border>
+
+                    <!-- Playhead -->
+                    <Canvas x:Name="PlayheadCanvas" Canvas.Top="0" Width="2"
+                            IsHitTestVisible="False">
+                        <Rectangle x:Name="PlayheadLine"
+                                   Width="2" Height="110"
+                                   Fill="{StaticResource Accent}"
+                                   Opacity="0.9"/>
+                        <!-- Triangle at top -->
+                        <Polygon Points="0,0 10,0 5,8"
+                                 Fill="{StaticResource Accent}"
+                                 Canvas.Left="-4"/>
+                    </Canvas>
+
+                </Canvas>
+            </ScrollViewer>
+        </Border>
+
+        <!-- ═══ Transport Bar ═══ -->
+        <Border Grid.Row="1" Background="{StaticResource PanelBg}"
+                BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <!-- Trim info (left) -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal"
+                            VerticalAlignment="Center" Margin="12,0">
+                    <TextBlock Text="In: " Foreground="{StaticResource TextSecondary}" FontSize="11"/>
+                    <TextBlock x:Name="InTimecode" Foreground="{StaticResource Accent}" FontSize="11" FontFamily="Consolas"/>
+                    <TextBlock Text="  Out: " Foreground="{StaticResource TextSecondary}" FontSize="11"/>
+                    <TextBlock x:Name="OutTimecode" Foreground="{StaticResource Accent}" FontSize="11" FontFamily="Consolas"/>
+                    <TextBlock Text="  Dur: " Foreground="{StaticResource TextSecondary}" FontSize="11"/>
+                    <TextBlock x:Name="DurTimecode" Foreground="{StaticResource TextPrimary}" FontSize="11" FontFamily="Consolas"/>
+                </StackPanel>
+
+                <!-- Transport controls (center) -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+
+                    <Button Style="{StaticResource TransportBtn}"
+                            Command="{Binding GoToStartCommand}"
+                            ToolTip="Go to start">
+                        <Path Data="M 0 0 L 0 10 M 2 5 L 10 0 L 10 10 Z"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Width="12" Height="10" Stretch="Uniform"/>
+                    </Button>
+
+                    <Button Style="{StaticResource TransportBtn}"
+                            Command="{Binding StepBackCommand}"
+                            ToolTip="Step back one frame">
+                        <Path Data="M 10 0 L 2 5 L 10 10 M 0 0 L 0 10"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" Width="12" Height="10" Stretch="Uniform"/>
+                    </Button>
+
+                    <!-- Play/Pause - bigger -->
+                    <Button x:Name="PlayPauseBtn"
+                            Style="{StaticResource TransportBtn}"
+                            Width="40" Height="40"
+                            Command="{Binding PlayPauseCommand}"
+                            ToolTip="Play / Pause (Space)">
+                        <Grid>
+                            <!-- Play icon -->
+                            <Path x:Name="PlayIcon" Data="M 0 0 L 14 7 L 0 14 Z"
+                                  Fill="{StaticResource Accent}" Width="14" Height="14" Stretch="Uniform"/>
+                            <!-- Pause icon -->
+                            <StackPanel x:Name="PauseIcon" Orientation="Horizontal"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Visibility="Collapsed">
+                                <Rectangle Width="4" Height="14" Fill="{StaticResource Accent}" RadiusX="1" RadiusY="1" Margin="0,0,3,0"/>
+                                <Rectangle Width="4" Height="14" Fill="{StaticResource Accent}" RadiusX="1" RadiusY="1"/>
+                            </StackPanel>
+                        </Grid>
+                    </Button>
+
+                    <Button Style="{StaticResource TransportBtn}"
+                            Command="{Binding StepForwardCommand}"
+                            ToolTip="Step forward one frame">
+                        <Path Data="M 0 0 L 8 5 L 0 10 M 10 0 L 10 10"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" Width="12" Height="10" Stretch="Uniform"/>
+                    </Button>
+
+                    <Button Style="{StaticResource TransportBtn}"
+                            Command="{Binding GoToEndCommand}"
+                            ToolTip="Go to end">
+                        <Path Data="M 0 0 L 8 5 L 0 10 M 10 0 L 10 10"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.5" Width="12" Height="10" Stretch="Uniform"/>
+                    </Button>
+                </StackPanel>
+
+                <!-- Timecode + zoom (right) -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal"
+                            VerticalAlignment="Center" HorizontalAlignment="Right"
+                            Margin="0,0,12,0">
+                    <TextBlock x:Name="PositionTimecode"
+                               FontFamily="Consolas" FontSize="12"
+                               Foreground="{StaticResource TextPrimary}"
+                               VerticalAlignment="Center" Margin="0,0,12,0"/>
+
+                    <Button Style="{StaticResource TransportBtn}" Click="ZoomOut_Click" ToolTip="Zoom out (scroll wheel)">
+                        <TextBlock Text="－" FontSize="14" Foreground="{StaticResource TextSecondary}"/>
+                    </Button>
+                    <Button Style="{StaticResource TransportBtn}" Click="ZoomIn_Click" ToolTip="Zoom in (scroll wheel)">
+                        <TextBlock Text="＋" FontSize="14" Foreground="{StaticResource TextSecondary}"/>
+                    </Button>
+                    <Button Style="{StaticResource TransportBtn}" Click="ZoomReset_Click" ToolTip="Fit timeline">
+                        <TextBlock Text="⊡" FontSize="13" Foreground="{StaticResource TextSecondary}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</UserControl>
