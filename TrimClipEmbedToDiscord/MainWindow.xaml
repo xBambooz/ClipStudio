@@ -207,7 +207,7 @@
                                    FontSize="13" HorizontalAlignment="Center"
                                    Margin="0,0,0,12"/>
                         <ProgressBar Width="220" IsIndeterminate="{Binding IsLoadingIndeterminate}"
-                                     Value="{Binding LoadingProgress}"/>
+                                     Value="{Binding LoadingProgress, Mode=OneWay}"/>
                     </StackPanel>
                 </Border>
             </Grid>
