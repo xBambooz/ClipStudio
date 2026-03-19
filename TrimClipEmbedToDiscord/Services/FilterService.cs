@@ -30,6 +30,13 @@ public class FilterService
             components.Add($"eq=saturation={sat}:brightness={br}:contrast={con}:gamma={gam}");
         }
 
+        // vibrance filter.
+        if (preset.Vibrance != 0.0)
+        {
+            string intensity = preset.Vibrance.ToString("G4", CultureInfo.InvariantCulture);
+            components.Add($"vibrance=intensity={intensity}");
+        }
+
         // unsharp filter.
         if (preset.Sharpness != 0.0)
         {

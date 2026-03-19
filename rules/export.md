@@ -2,86 +2,100 @@
 
 ## Export Dialog
 
-Triggered by the Export button (top-right, upload icon + "Export" label). Opens a modal `ExportDialog` window.
+Triggered by the Export button (top-right toolbar). Opens a modal `ExportDialog` window.
 
-### ExportSettings Model
+## ExportSettings Model
 
 ```csharp
-public class ExportSettings
+public class ExportSettings : ObservableObject
 {
-    public string OutputFolder { get; set; }       // last used, persisted
-    public string Container { get; set; }          // "mp4", "mkv", "webm"
-    public string VideoCodec { get; set; }         // "h264", "h265", "vp9"
-    public string AudioCodec { get; set; }         // "aac", "opus"
-    public BitrateMode BitrateMode { get; set; }   // CRF or CBR
-    public int Crf { get; set; }                   // 0-51 for h264/h265
-    public int Bitrate { get; set; }               // kbps for CBR
-    public string Preset { get; set; }             // "ultrafast"…"veryslow" (default: "slow" = high quality)
-    public string Profile { get; set; }            // "baseline", "main", "high" (default: "high")
-    public bool MixAudioTracks { get; set; }       // merge all audio tracks into one (default: true), persisted
-    public bool EmbedUpload { get; set; }          // persisted toggle
+    string OutputFolder;        // last used, persisted
+    string Container;           // "mp4", "mkv", "webm"
+    string VideoCodec;          // "libx264", "libx265", "libvpx-vp9"
+    string AudioCodec;          // "aac", "libopus", "mp3"
+    BitrateMode BitrateMode;    // CRF or CBR
+    int Crf;                    // 0-51 (default: 18)
+    int Bitrate;                // kbps for CBR (default: 8000)
+    string Preset;              // "ultrafast"…"veryslow" (default: "slow")
+    string Profile;             // "baseline", "main", "high" (default: "high")
+    bool MixAudioTracks;        // merge all audio (default: true), persisted
+    bool EmbedUpload;           // upload after export, persisted
+    bool HardwareAcceleration;  // use GPU encoding (default: true), persisted
 }
 ```
 
-### File Size Estimation
+## GPU Hardware Acceleration
 
-Estimate before encoding:
-```
-duration_seconds = (OutPoint - InPoint).TotalSeconds
-estimated_bytes  = (bitrate_kbps * 1000 / 8) * duration_seconds
-                 + audio_bitrate_kbps * 1000 / 8 * duration_seconds
-```
-For CRF mode use a heuristic based on resolution × duration × quality factor. Display as `~X.X MB`.
+When `HardwareAcceleration` is true:
+
+### Decoding
+`-hwaccel auto` added before `-i` on all FFmpeg decode commands (encode input + frame extraction).
+
+### Encoding — Auto-Detection
+`FFmpegService.ProbeGpuEncodersAsync()` runs `ffmpeg -encoders` and caches available GPU encoders:
+
+| Priority | H.264 | HEVC |
+|----------|-------|------|
+| 1 (NVIDIA) | `h264_nvenc` | `hevc_nvenc` |
+| 2 (Intel) | `h264_qsv` | `hevc_qsv` |
+| 3 (AMD) | `h264_amf` | `hevc_amf` |
+
+### Encoding — Transparent Substitution
+User selects `libx264`/`libx265` in the UI — `ResolveCodec()` swaps to the GPU encoder behind the scenes. VP9 stays software (no GPU encoder).
+
+### Preset Mapping
+| Software | NVENC (p1-p7) | QSV | AMF |
+|----------|---------------|-----|-----|
+| ultrafast | p1 | veryfast | speed |
+| fast | p3 | fast | speed |
+| medium | p4 | medium | balanced |
+| slow | p5 | slow | quality |
+| veryslow | p7 | veryslow | quality |
+
+### Rate Control Mapping
+| Mode | Software | NVENC | QSV | AMF |
+|------|----------|-------|-----|-----|
+| CRF | `-crf N` | `-cq N -rc vbr` | `-global_quality N` | `-qp_i N -qp_p N -rc cqp` |
+| CBR | `-b:v Nk` | `-b:v Nk` | `-b:v Nk` | `-b:v Nk` |
+
+### Profile
+NVENC supports `baseline/main/high`. QSV/AMF: profile flag omitted (auto-select).
 
 ## FFmpeg Encode Command
 
-Built by `FFmpegService.BuildEncodeArgs(ExportSettings, inPoint, outPoint, inputPath, outputPath)`:
+Built by `FFmpegService.BuildEncodeProcessStartInfo()`:
 
 ```
 ffmpeg -y -hide_banner
-  -ss {inPoint}
-  -to {outPoint}
+  [-hwaccel auto]                    # if HW accel enabled
+  -ss {inPoint} -to {outPoint}
   -i {inputPath}
-  -c:v {videoCodec} -preset {preset} -profile:v {profile}
-  [-crf {crf} | -b:v {bitrate}k]
-  [if MixAudioTracks: -filter_complex "[0:a]amerge=inputs={trackCount}[aout]" -map 0:v -map "[aout]"]
-  [else: -map 0:v -map 0:a]
-  -c:a {audioCodec} -b:a 192k -ac 2
-  -threads 0
-  -movflags +faststart
-  {outputPath}
+  -c:v {resolvedCodec}              # GPU or software
+  -preset {resolvedPreset}          # mapped to GPU presets
+  [-profile:v {profile}]            # omitted for QSV/AMF
+  [-filter_complex amerge ...]      # if mixing audio
+  [-vf "{vfChain}"]                 # if filters active
+  -c:a {audioCodec} -b:a 192k -ac 2 -threads 0
+  [-crf N | -cq N -rc vbr | ...]   # rate control per encoder
+  -movflags +faststart {outputPath}
 ```
-
-- `-threads 0` — tells FFmpeg to use all available CPU cores for encoding (multithreaded by default for h264/h265).
-- `-ac 2` — downmix to stereo after merge (required when using `amerge`).
-- `amerge=inputs=N` — N is the number of audio streams detected in the source file via FFprobe.
-
-Progress is parsed from FFmpeg stderr `time=HH:MM:SS.ss` lines and reported as a 0–100 double to the export progress bar.
 
 ## Audio Track Merging
 
-### Why It Matters
+Toggle: **"Merge audio tracks"** (default: ON, persisted).
 
-Game capture software (OBS, NVIDIA ShadowPlay, etc.) often records multiple audio tracks (e.g., track 1 = game, track 2 = mic, track 3 = desktop). Discord and many platforms only play the first audio track, silently ignoring the rest.
+- **ON**: `amerge=inputs=N` combines all audio into stereo. Handles multi-track game captures (OBS, ShadowPlay).
+- **OFF**: `-map 0:a` keeps separate tracks.
+- Skipped if `audioTrackCount <= 1`.
 
-### Option in Export Dialog
+## File Size Estimation
 
-Toggle: **"Merge audio tracks into one"** (default: ON, persisted in settings).
+CRF mode uses heuristic: `pixels × duration × quality_factor`. CBR mode: `bitrate × duration`. Displayed as `~X.X MB`.
 
-- **ON** — `amerge` filter combines all audio streams into a single stereo track. All audio is audible everywhere.
-- **OFF** — all audio tracks are mapped as separate streams with `-map 0:a`. Useful for video editors that want separate tracks.
+## Export Flow
 
-### Detecting Track Count
-
-Before building encode args, probe the source:
-```
-ffprobe -v error -select_streams a -show_entries stream=index -of csv=p=0 {inputPath}
-```
-Count the returned lines → `trackCount`. If `trackCount <= 1`, skip `amerge` even if the toggle is ON (no-op).
-
-## Export Toggle (Embed Upload)
-
-- A toggle button/checkbox in the Export dialog: "Upload as embed link"
-- State persisted in `settings.json` → `EmbedUpload`
-- If enabled, after encode completes, hand the output file to `UploadService` automatically
-- Show the `UploadProgressDialog` as the next step
+1. `ExportViewModel.RunExportAsync()` → `FFmpegService.ProbeGpuEncodersAsync()` (if HW accel)
+2. `FFmpegService.EncodeAsync()` with progress parsed from stderr `time=` lines
+3. On success: `ExportCompleted` event fires → `MainViewModel.HasExported = true`
+4. If `EmbedUpload`: launches `UploadProgressDialog` automatically
+5. Cancellation kills the FFmpeg process tree

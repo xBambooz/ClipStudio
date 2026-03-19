@@ -14,6 +14,7 @@
             <conv:InverseBoolConverter x:Key="InverseBool"/>
             <conv:DoneToCloseTextConverter x:Key="DoneToClose"/>
             <conv:EnumToIndexConverter x:Key="EnumToIndex"/>
+            <conv:StringToVisibilityConverter x:Key="StringToVis"/>
             <DropShadowEffect x:Key="ShadowDepth2" BlurRadius="16" ShadowDepth="2" Color="Black" Opacity="0.5"/>
         </ResourceDictionary>
     </Application.Resources>

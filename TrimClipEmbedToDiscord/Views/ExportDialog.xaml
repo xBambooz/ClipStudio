@@ -5,19 +5,19 @@
         Title="Export" Height="560" Width="460"
         WindowStartupLocation="CenterOwner"
         WindowStyle="None" ResizeMode="NoResize"
-        Background="{StaticResource PanelBg}"
-        BorderBrush="{StaticResource Border}" BorderThickness="1">
+        Background="{DynamicResource PanelBg}"
+        BorderBrush="{DynamicResource Border}" BorderThickness="1">
 
     <Window.Resources>
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
-            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
             <Setter Property="Margin" Value="0,14,0,6"/>
 
         </Style>
         <Style x:Key="FieldLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Margin" Value="0,0,0,4"/>
         </Style>
@@ -35,14 +35,14 @@
         </Grid.RowDefinitions>
 
         <!-- Title bar -->
-        <Border Grid.Row="0" Background="{StaticResource ToolbarBg}"
+        <Border Grid.Row="0" Background="{DynamicResource ToolbarBg}"
                 MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
             <Grid Margin="16,0">
                 <TextBlock Text="Export" FontSize="13" FontWeight="SemiBold"
-                           Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                           Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                 <Button Style="{StaticResource IconButton}"
                         HorizontalAlignment="Right" Padding="6" Click="Close_Click">
-                    <TextBlock Text="✕" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                    <TextBlock Text="✕" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
                 </Button>
             </Grid>
         </Border>
@@ -98,7 +98,7 @@
                         <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource FieldLabel}" Text="CRF (lower = better quality)"/>
                         <TextBlock Grid.Column="1" FontFamily="Consolas" FontSize="12"
-                                   Foreground="{StaticResource Accent}"
+                                   Foreground="{DynamicResource Accent}"
                                    Text="{Binding Settings.Crf}"/>
                     </Grid>
                     <Slider Minimum="0" Maximum="51" IsSnapToTickEnabled="True" TickFrequency="1"
@@ -117,9 +117,9 @@
                                   IsChecked="{Binding Settings.MixAudioTracks}"
                                   VerticalAlignment="Center"/>
                     <StackPanel Margin="10,0,0,0">
-                        <TextBlock Text="Merge audio tracks" Foreground="{StaticResource TextPrimary}" FontSize="12"/>
+                        <TextBlock Text="Merge audio tracks" Foreground="{DynamicResource TextPrimary}" FontSize="12"/>
                         <TextBlock Text="Combines all tracks so Discord plays all audio"
-                                   Foreground="{StaticResource TextSecondary}" FontSize="10"/>
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="10"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -130,9 +130,9 @@
                                   IsChecked="{Binding Settings.EmbedUpload}"
                                   VerticalAlignment="Center"/>
                     <StackPanel Margin="10,0,0,0">
-                        <TextBlock Text="Upload as embed link" Foreground="{StaticResource TextPrimary}" FontSize="12"/>
+                        <TextBlock Text="Upload as embed link" Foreground="{DynamicResource TextPrimary}" FontSize="12"/>
                         <TextBlock Text="Upload to catbox.moe and copy Discord embed URL"
-                                   Foreground="{StaticResource TextSecondary}" FontSize="10"/>
+                                   Foreground="{DynamicResource TextSecondary}" FontSize="10"/>
                     </StackPanel>
                 </StackPanel>
 
@@ -141,26 +141,35 @@
 
         <!-- Footer -->
         <Border Grid.Row="2" Padding="20,12"
-                Background="{StaticResource ToolbarBg}"
-                BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0">
+                Background="{DynamicResource ToolbarBg}"
+                BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,1,0,0">
             <Grid>
                 <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
 
                 <!-- Estimated size -->
                 <StackPanel VerticalAlignment="Center">
-                    <TextBlock Text="Estimated size" Foreground="{StaticResource TextSecondary}" FontSize="10"/>
+                    <TextBlock Text="Estimated size" Foreground="{DynamicResource TextSecondary}" FontSize="10"/>
                     <TextBlock Text="{Binding EstimatedSize}"
-                               Foreground="{StaticResource TextPrimary}" FontSize="16" FontWeight="SemiBold"/>
+                               Foreground="{DynamicResource TextPrimary}" FontSize="16" FontWeight="SemiBold"/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <!-- Export progress (shown while exporting) -->
                     <StackPanel Orientation="Horizontal" Margin="0,0,12,0"
                                 Visibility="{Binding IsExporting, Converter={StaticResource BoolToVis}}">
-                        <ProgressBar Width="120" Value="{Binding ExportProgress}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <ProgressBar Width="120"
+                                     Value="{Binding ExportProgress, Mode=OneWay}"
+                                     Margin="0,0,8,0"
+                                     VerticalAlignment="Center"/>
                         <Button Style="{StaticResource SecondaryButton}" Content="Cancel"
                                 Command="{Binding CancelExportCommand}" Padding="10,5"/>
                     </StackPanel>
+
+                    <TextBlock VerticalAlignment="Center"
+                               Margin="0,0,12,0"
+                               Foreground="{DynamicResource TextSecondary}"
+                               FontSize="11"
+                               Text="{Binding QueueStatus}"/>
 
                     <Button Style="{StaticResource SecondaryButton}"
                             Content="Cancel" Padding="12,7" Margin="0,0,8,0"

@@ -16,7 +16,9 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="LibVLCSharp.WPF" Version="3.*" />
     <PackageReference Include="ModernWpfUI" Version="0.9.6" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.*" />
   </ItemGroup>
 
 

@@ -17,7 +17,9 @@ public partial class UploadProgressDialog : Window
 
     void CloseButton_Click(object sender, RoutedEventArgs e)
     {
-        _vm.CancelCommand.Execute(null);
+        if (!_vm.IsDone && !_vm.IsError)
+            _vm.CancelCommand.Execute(null);
+
         Close();
     }
 }

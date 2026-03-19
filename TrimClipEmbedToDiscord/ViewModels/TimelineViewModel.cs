@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using BamboozClipStudio.Core;
 using BamboozClipStudio.Models;
 
@@ -15,10 +16,11 @@ public class TimelineViewModel : ObservableObject
     double _zoomLevel = 1.0;
     double _scrollOffset;
     bool _isPlaying;
-    BitmapImage? _previewFrame;
     string _timecode = "00:00:00.000";
-
-    readonly DispatcherTimer _playTimer = new() { Interval = TimeSpan.FromMilliseconds(33) };
+    string _fileName = string.Empty;
+    double _volume = 1.0;
+    double _preMuteVolume = 1.0;
+    bool _isMuted;
 
     public ObservableCollection<ThumbnailItem> Thumbnails { get; } = new();
 
@@ -34,7 +36,9 @@ public class TimelineViewModel : ObservableObject
                 CurrentPosition = TimeSpan.Zero;
                 ZoomLevel = 1.0;
                 ScrollOffset = 0;
+                FileName = Path.GetFileName(value.FilePath);
                 Thumbnails.Clear();
+                CommandManager.InvalidateRequerySuggested();
             }
         }
     }
@@ -72,7 +76,7 @@ public class TimelineViewModel : ObservableObject
                 if (value > _clip.Duration) value = _clip.Duration;
             }
             if (SetProperty(ref _currentPosition, value))
-                Timecode = FormatTimecode(value);
+                UpdateTimecode();
         }
     }
 
@@ -91,19 +95,55 @@ public class TimelineViewModel : ObservableObject
     public bool IsPlaying
     {
         get => _isPlaying;
-        private set => SetProperty(ref _isPlaying, value);
-    }
-
-    public BitmapImage? PreviewFrame
-    {
-        get => _previewFrame;
-        set => SetProperty(ref _previewFrame, value);
+        private set
+        {
+            if (SetProperty(ref _isPlaying, value))
+                UpdateTimecode();
+        }
     }
 
     public string Timecode
     {
         get => _timecode;
         private set => SetProperty(ref _timecode, value);
+    }
+
+    public string FileName
+    {
+        get => _fileName;
+        private set => SetProperty(ref _fileName, value);
+    }
+
+    public double Volume
+    {
+        get => _volume;
+        set
+        {
+            if (SetProperty(ref _volume, Math.Clamp(value, 0.0, 1.0)))
+                OnPropertyChanged(nameof(VolumePercent));
+        }
+    }
+
+    public string VolumePercent => $"{(int)Math.Round(_volume * 100)}%";
+
+    public bool IsMuted
+    {
+        get => _isMuted;
+        set
+        {
+            if (SetProperty(ref _isMuted, value))
+            {
+                if (value)
+                {
+                    _preMuteVolume = _volume;
+                    Volume = 0;
+                }
+                else
+                {
+                    Volume = _preMuteVolume;
+                }
+            }
+        }
     }
 
     public TimeSpan TrimDuration => OutPoint - InPoint;
@@ -116,24 +156,11 @@ public class TimelineViewModel : ObservableObject
 
     public TimelineViewModel()
     {
-        PlayPauseCommand = new RelayCommand(TogglePlayback, () => Clip != null);
-        GoToStartCommand = new RelayCommand(() => { CurrentPosition = InPoint; StopPlayback(); }, () => Clip != null);
-        GoToEndCommand = new RelayCommand(() => { CurrentPosition = OutPoint; StopPlayback(); }, () => Clip != null);
-        StepBackCommand = new RelayCommand(StepBack, () => Clip != null);
-        StepForwardCommand = new RelayCommand(StepForward, () => Clip != null);
-
-        _playTimer.Tick += (_, _) =>
-        {
-            if (_clip == null) return;
-            var next = CurrentPosition + TimeSpan.FromMilliseconds(33);
-            if (next >= OutPoint)
-            {
-                CurrentPosition = OutPoint;
-                StopPlayback();
-                return;
-            }
-            CurrentPosition = next;
-        };
+        PlayPauseCommand = new RelayCommand(TogglePlayback);
+        GoToStartCommand = new RelayCommand(() => { CurrentPosition = InPoint; StopPlayback(); });
+        GoToEndCommand   = new RelayCommand(() => { CurrentPosition = OutPoint; StopPlayback(); });
+        StepBackCommand  = new RelayCommand(StepBack);
+        StepForwardCommand = new RelayCommand(StepForward);
     }
 
     public void TogglePlayback()
@@ -147,13 +174,11 @@ public class TimelineViewModel : ObservableObject
         if (_clip == null) return;
         if (CurrentPosition >= OutPoint) CurrentPosition = InPoint;
         IsPlaying = true;
-        _playTimer.Start();
     }
 
     public void StopPlayback()
     {
         IsPlaying = false;
-        _playTimer.Stop();
     }
 
     void StepBack()
@@ -172,6 +197,21 @@ public class TimelineViewModel : ObservableObject
         var frameTime = TimeSpan.FromSeconds(1.0 / (_clip.FrameRate > 0 ? _clip.FrameRate : 30));
         var next = CurrentPosition + frameTime;
         CurrentPosition = next > _clip.Duration ? _clip.Duration : next;
+    }
+
+    void UpdateTimecode()
+    {
+        Timecode = FormatTimecode(GetDisplayPosition());
+    }
+
+    TimeSpan GetDisplayPosition()
+    {
+        if (!_isPlaying || _clip == null)
+            return _currentPosition;
+
+        double frameRate = _clip.FrameRate > 0 ? _clip.FrameRate : 30.0;
+        long frameIndex = (long)Math.Floor((_currentPosition.TotalSeconds * frameRate) + 0.0001);
+        return TimeSpan.FromSeconds(frameIndex / frameRate);
     }
 
     static string FormatTimecode(TimeSpan t)

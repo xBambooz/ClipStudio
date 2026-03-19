@@ -5,12 +5,12 @@
 
     <UserControl.Resources>
         <Style x:Key="FilterLabel" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="Margin" Value="0,0,0,2"/>
         </Style>
         <Style x:Key="FilterValue" TargetType="TextBlock">
-            <Setter Property="Foreground" Value="{StaticResource Accent}"/>
+            <Setter Property="Foreground" Value="{DynamicResource Accent}"/>
             <Setter Property="FontSize" Value="11"/>
             <Setter Property="FontFamily" Value="Consolas"/>
             <Setter Property="Width" Value="36"/>
@@ -18,8 +18,8 @@
         </Style>
     </UserControl.Resources>
 
-    <Border Background="{StaticResource PanelBg}"
-            BorderBrush="{StaticResource Border}"
+    <Border Background="{DynamicResource PanelBg}"
+            BorderBrush="{DynamicResource Border}"
             BorderThickness="1,0,0,0">
         <Grid>
             <Grid.RowDefinitions>
@@ -29,14 +29,14 @@
             </Grid.RowDefinitions>
 
             <!-- Header -->
-            <Border Grid.Row="0" Background="{StaticResource ToolbarBg}" Padding="14,10">
+            <Border Grid.Row="0" Background="{DynamicResource ToolbarBg}" Padding="14,10">
                 <Grid>
                     <TextBlock Text="Filters" FontSize="13" FontWeight="SemiBold"
-                               Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center"/>
+                               Foreground="{DynamicResource TextPrimary}" VerticalAlignment="Center"/>
                     <Button Style="{StaticResource IconButton}"
                             Command="{Binding CloseCommand}"
                             HorizontalAlignment="Right" Padding="4" ToolTip="Close">
-                        <TextBlock Text="✕" FontSize="11" Foreground="{StaticResource TextSecondary}"/>
+                        <TextBlock Text="✕" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
                     </Button>
                 </Grid>
             </Border>
@@ -98,7 +98,7 @@
 
             <!-- Reset button -->
             <Border Grid.Row="2" Padding="14,10"
-                    BorderBrush="{StaticResource BorderSubtle}" BorderThickness="0,1,0,0">
+                    BorderBrush="{DynamicResource BorderSubtle}" BorderThickness="0,1,0,0">
                 <Button Style="{StaticResource SecondaryButton}"
                         Content="Reset All Filters"
                         Command="{Binding ResetCommand}"

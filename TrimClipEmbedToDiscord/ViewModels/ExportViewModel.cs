@@ -11,6 +11,7 @@ public class ExportViewModel : ObservableObject
     readonly FFmpegService _ffmpeg;
     readonly UploadService _upload;
     readonly SettingsService _settings;
+    readonly BackgroundJobService _jobs;
     AppSettings _appSettings;
 
     string _estimatedSize = "—";
@@ -25,6 +26,7 @@ public class ExportViewModel : ObservableObject
     public bool IsExporting    { get => _isExporting;    private set => SetProperty(ref _isExporting,    value); }
     public double ExportProgress { get => _exportProgress; private set => SetProperty(ref _exportProgress, value); }
     public string ExportStatus { get => _exportStatus;   private set => SetProperty(ref _exportStatus,   value); }
+    public string QueueStatus => _jobs.QueuedJobs > 0 ? $"{_jobs.QueuedJobs} queued" : string.Empty;
 
     public AsyncRelayCommand ExportCommand { get; }
     public RelayCommand BrowseFolderCommand { get; }
@@ -32,6 +34,9 @@ public class ExportViewModel : ObservableObject
 
     // Injected before export runs
     public Func<(TimeSpan InPoint, TimeSpan OutPoint, ClipProject? Clip, string VfChain)>? GetExportContext { get; set; }
+
+    /// <summary>Fired after a successful export completes.</summary>
+    public event Action? ExportCompleted;
 
     public string[] ContainerOptions { get; } = ["mp4", "mkv", "webm"];
     public string[] VideoCodecOptions { get; } = ["libx264", "libx265", "libvpx-vp9"];
@@ -41,11 +46,12 @@ public class ExportViewModel : ObservableObject
     public string[] BitrateModeOptions { get; } = ["CRF (Quality)", "CBR (Bitrate)"];
     public bool IsCrf => Settings.BitrateMode == BitrateMode.Crf;
 
-    public ExportViewModel(FFmpegService ffmpeg, UploadService upload, SettingsService settings)
+    public ExportViewModel(FFmpegService ffmpeg, UploadService upload, SettingsService settings, BackgroundJobService jobs)
     {
         _ffmpeg = ffmpeg;
         _upload = upload;
         _settings = settings;
+        _jobs = jobs;
         _appSettings = settings.Load();
 
         Settings = new ExportSettings
@@ -53,6 +59,7 @@ public class ExportViewModel : ObservableObject
             OutputFolder = _appSettings.LastOutputFolder,
             MixAudioTracks = _appSettings.MixAudioTracks,
             EmbedUpload = _appSettings.EmbedUpload,
+            HardwareAcceleration = _appSettings.HardwareAcceleration,
         };
 
         Settings.PropertyChanged += (_, _) =>
@@ -60,6 +67,12 @@ public class ExportViewModel : ObservableObject
             UpdateEstimatedSize();
             OnPropertyChanged(nameof(IsCrf));
             SaveSettingsFromExport();
+        };
+
+        _jobs.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(BackgroundJobService.QueuedJobs))
+                OnPropertyChanged(nameof(QueueStatus));
         };
 
         ExportCommand = new AsyncRelayCommand(RunExportAsync, () => !IsExporting);
@@ -106,7 +119,7 @@ public class ExportViewModel : ObservableObject
         var ctx = GetExportContext?.Invoke();
         if (ctx == null || ctx.Value.Clip == null)
         {
-            MessageBox.Show("No media loaded.", "Export", MessageBoxButton.OK, MessageBoxImage.Warning);
+            DialogService.ShowWarning("Export", "No media loaded.");
             return;
         }
 
@@ -123,16 +136,32 @@ public class ExportViewModel : ObservableObject
 
         try
         {
+            using var job = await _jobs.EnqueueAsync("Exporting clip");
+            _jobs.RegisterCancellation(() => _exportCts?.Cancel());
+            _jobs.Report("Exporting clip", "Preparing export…", isIndeterminate: true);
+
             await _ffmpeg.EnsureFfmpegAvailableAsync(null);
 
+            // Probe GPU encoders if HW accel is enabled
+            if (Settings.HardwareAcceleration)
+                await _ffmpeg.ProbeGpuEncodersAsync();
+
             int trackCount = clip.AudioTrackCount;
-            var progress = new Progress<double>(p => { ExportProgress = p; ExportStatus = $"Encoding… {p:F0}%"; });
+            var progress = new Progress<double>(p =>
+            {
+                ExportProgress = p;
+                ExportStatus = $"Encoding… {p:F0}%";
+                _jobs.Report("Exporting clip", ExportStatus, p, isIndeterminate: false);
+            });
             await _ffmpeg.EncodeAsync(Settings, string.IsNullOrEmpty(vfChain) ? null : vfChain,
                                       inPoint, outPoint, clip.FilePath, outPath,
-                                      trackCount, outPoint - inPoint, progress, _exportCts.Token);
+                                      trackCount, outPoint - inPoint, progress, _exportCts.Token,
+                                      Settings.HardwareAcceleration);
 
             ExportProgress = 100;
             ExportStatus = "Done!";
+            _jobs.Report("Exporting clip", "Encoding complete.", 100, isIndeterminate: false);
+            ExportCompleted?.Invoke();
 
             if (Settings.EmbedUpload)
             {
@@ -140,29 +169,35 @@ public class ExportViewModel : ObservableObject
                 var uploadVm = new UploadProgressViewModel(_upload);
                 var dialog = new Views.UploadProgressDialog(uploadVm) { Owner = Application.Current.MainWindow };
                 dialog.Show();
-                _ = uploadVm.StartUploadAsync(outPath);
+                _jobs.Report("Uploading clip", "Uploading to catbox.moe…", 0, isIndeterminate: true);
+                await uploadVm.StartUploadAsync(outPath, _exportCts);
+                ExportStatus = uploadVm.StatusMessage;
+                _jobs.Report("Uploading clip", uploadVm.StatusMessage, uploadVm.ProgressPercent,
+                             isIndeterminate: uploadVm.IsIndeterminate);
             }
             else
             {
-                MessageBox.Show($"Exported to:\n{outPath}", "Export Complete",
-                                MessageBoxButton.OK, MessageBoxImage.Information);
+                DialogService.ShowInfo("Export Complete", $"Exported to:\n{outPath}");
             }
         }
         catch (OperationCanceledException)
         {
             ExportStatus = "Cancelled.";
+            _jobs.Report("Background work", "Cancelled.", 0, isIndeterminate: false);
             if (File.Exists(outPath)) try { File.Delete(outPath); } catch { }
         }
         catch (Exception ex)
         {
             ExportStatus = "Failed.";
-            MessageBox.Show($"Export failed:\n{ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _jobs.Report("Background work", $"Failed: {ex.Message}", 0, isIndeterminate: false);
+            DialogService.ShowError("Error", $"Export failed:\n{ex.Message}");
         }
         finally
         {
             IsExporting = false;
             _exportCts?.Dispose();
             _exportCts = null;
+            _jobs.ClearCancellation();
         }
     }
 

@@ -1,101 +1,74 @@
 # UI & Theming Rules
 
-## Theme Library
+## Theme System
 
-Use **ModernWpfUI** (`ModernWpf` NuGet). It provides OS-native dark/light theme switching, modern control styles, and fluent design primitives.
+10 themes available, all switchable live via `DynamicResource`. Theme selected in Settings gear menu → Theme submenu.
 
-```xml
-<!-- App.xaml -->
-<Application.Resources>
-    <ResourceDictionary>
-        <ResourceDictionary.MergedDictionaries>
-            <ui:ThemeResources/>
-            <ui:XamlControlsResources/>
-            <ResourceDictionary Source="Theme/UIColors.xaml"/>
-            <ResourceDictionary Source="Theme/UIStyles.xaml"/>
-        </ResourceDictionary.MergedDictionaries>
-    </ResourceDictionary>
-</Application.Resources>
-```
+| Theme | File | Accent | Background Style |
+|-------|------|--------|-----------------|
+| Auto (System) | UIColors.xaml or UIColors-Light.xaml | `#00C8D4` | Follows Windows dark/light |
+| Dark | UIColors.xaml | `#00C8D4` | Dark gray `#141414` |
+| Light | UIColors-Light.xaml | `#00A8B4` | Light gray `#F5F5F5` |
+| Mint Dark | UIColors-MintDark.xaml | Mint green | Dark |
+| Red Dark | UIColors-RedDark.xaml | Red | Dark |
+| Premiere Pro | UIColors-PremierePro.xaml | Adobe blue | Premiere gray tones |
+| OLED | UIColors-OLED.xaml | `#FFFFFF` | Pure black `#000000` |
+| Discord | UIColors-Discord.xaml | Blurple `#5865F2` | Discord dark `#36393F` |
+| Twilight Blurple | UIColors-TwilightBlurple.xaml | Blurple `#5865F2` | AMOLED Discord `#1E1F22` |
+| YouTube Dark | UIColors-YouTube.xaml | Red `#FF0000` | YouTube dark `#0F0F0F` |
 
-## Auto Dark/Light Detection
+## Theme Switching
 
-On startup, read `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`. If `0` → dark; if `1` → light. Apply via `ThemeManager.Current.ApplicationTheme`.
+`App.ApplyTheme(string? themeOverride)`:
+1. Removes existing `UIColors*` dictionary from `MergedDictionaries`
+2. Inserts the new one at position 0
+3. All controls use `DynamicResource` so they update immediately
 
-User can override in Settings (stored in `settings.json` as `"ThemeOverride": "Dark" | "Light" | null`).
+Auto mode reads `HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize\AppsUseLightTheme`.
 
-## Color Palette (UIColors.xaml)
+## Color Resource Keys
 
-Always reference by key — never hardcode hex in views.
+All views reference colors by key — **never hardcode hex in XAML views**.
 
-| Key | Dark Value | Light Value | Use |
-|-----|-----------|-------------|-----|
-| `AccentColor` | `#00C8D4` | `#00A8B4` | Primary cyan accent (buttons, highlights, handles) |
-| `TimelineHighlight` | `#00C8D420` | `#00C8D430` | In/out region overlay |
-| `ToolbarBackground` | `#1E1E1E` | `#F3F3F3` | Top toolbar |
-| `TimelineBackground` | `#141414` | `#E8E8E8` | Timeline canvas background |
+Key groups defined in each UIColors file:
+- `AppBg`, `PanelBg`, `ToolbarBg`, `TimelineBg`, `DropZoneBg` — backgrounds
+- `TextPrimary`, `TextSecondary`, `TextDisabled`, `TextOnAccent` — text
+- `Accent`, `AccentHover`, `AccentPressed` — interactive elements
+- `Border`, `BorderSubtle` — borders
+- `Danger` — destructive/mute indicators
+- `ScrollThumb`, `ScrollThumbHover` — scrollbar
 
-## Accent Color Usage
+## MainViewModel Theme Properties
 
-All interactive elements use `AccentColor` (light cyan `#00C8D4`):
-- Timeline in/out drag handles
-- Selected/active toolbar buttons
-- Toggle button "on" state
-- Progress bar fill
-- Focus rings on inputs
+10 bool properties (`ThemeModeAuto`, `ThemeModeDark`, ..., `ThemeModeYouTube`) for radio-style menu checkmarks. `SetTheme(string?)` updates all via `OnPropertyChanged`.
 
 ## Control Styles (UIStyles.xaml)
 
-**Always style these explicitly — never leave at OS default:**
+Custom styles override OS defaults for:
+- **Scrollbar** — thin (6px), rounded thumb, accent hover, transparent track
+- **ComboBox** — matches app background, accent highlight on selected
+- **Slider** — thin track, circular thumb
+- **Buttons**: `PrimaryButton` (accent bg), `SecondaryButton` (transparent), `IconButton` (flat), `WinControlButton` (title bar), `CloseButton` (red hover)
+- **ContextMenu/MenuItem** — themed background and hover
+- **ProgressBar** — accent fill
+- **ToolTips** — dark background
 
-### Scrollbar
-```xml
-<Style TargetType="ScrollBar">
-    <!-- Thin (6px), rounded thumb, accent color on hover, transparent track -->
-</Style>
-```
-
-### ComboBox / DropDown
-```xml
-<Style TargetType="ComboBox">
-    <!-- Match app background, 1px border in BorderColorSecondary, accent highlight on selected item -->
-</Style>
-```
-
-### Slider
-```xml
-<Style TargetType="Slider">
-    <!-- Thin track, circular thumb in AccentColor, no default Windows chrome -->
-</Style>
-```
-
-### Buttons
-- **Primary** (Export, Upload): `AccentColor` background, white text, 4px corner radius
-- **Secondary** (Cancel, toolbar actions): transparent background, `AccentColor` border, 4px radius
-- **Icon buttons** (toolbar): 32×32 flat, no border, `AccentColor` icon tint on hover
+Custom dialogs:
+- `ThemedDialog` replaces default `MessageBox` prompts for first-run setup, crash restore, close confirmation, and status/error prompts
+- Dialogs use theme resources, rounded outer corners, rounded header/footer sections, and custom shadow
 
 ## Window Chrome
 
-`WindowStyle="None"`, `AllowsTransparency="False"`. Custom title bar strip with drag support (`MouseLeftButtonDown → DragMove()`). Custom minimize/maximize/close buttons in the title bar.
-
-## Toolbar
-
-Top toolbar has:
-- Left: app icon + name
-- Middle: File menu items (Open Media, Exit) + Filters toggle + Context Menu registration option
-- Right: Export button (upload icon + "Export" text)
+`WindowStyle="None"`, `ResizeMode="CanResizeWithGrip"`, `WindowChrome` with `CaptionHeight="0"`. Custom title bar with:
+- Drag to move (`DragMove()`)
+- Double-click to maximize/restore
+- Custom minimize/maximize/close buttons
+- Maximized windows apply a root content inset based on the desktop work area so edge UI is not clipped
 
 ## Typography
 
-Use **Segoe UI Variable** (Windows 11 system font) as the default. No embedded fonts needed — `FontFamily="Segoe UI Variable"` or inherit from system default via ModernWpf.
+System font — `Segoe UI` / `Segoe UI Variable`. Monospace values use `Consolas` (timecodes, volume %, filter values).
 
-## Styling Checklist
+## Title Bar Spacing
 
-Before considering any UI component done, verify all of these are custom-styled (not OS default):
-- [ ] Scrollbars (vertical and horizontal)
-- [ ] All ComboBox/DropDown menus and item containers
-- [ ] All Sliders
-- [ ] All TextBoxes (border, focus ring)
-- [ ] ContextMenu and MenuItem
-- [ ] ToolTips
-- [ ] ProgressBar
+The main title bar content grid has matching top/bottom vertical margin so buttons and text are not visually bottom-heavy.

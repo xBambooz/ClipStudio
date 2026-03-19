@@ -28,6 +28,14 @@ public class DoneToCloseTextConverter : IValueConverter
     public object ConvertBack(object value, Type t, object p, CultureInfo c) => throw new NotImplementedException();
 }
 
+[ValueConversion(typeof(string), typeof(Visibility))]
+public class StringToVisibilityConverter : IValueConverter
+{
+    public object Convert(object value, Type t, object p, CultureInfo c)
+        => value is string s && !string.IsNullOrEmpty(s) ? Visibility.Visible : Visibility.Collapsed;
+    public object ConvertBack(object value, Type t, object p, CultureInfo c) => throw new NotImplementedException();
+}
+
 [ValueConversion(typeof(BitrateMode), typeof(int))]
 public class EnumToIndexConverter : IValueConverter
 {

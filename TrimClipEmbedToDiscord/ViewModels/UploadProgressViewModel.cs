@@ -7,7 +7,7 @@ namespace BamboozClipStudio.ViewModels;
 public class UploadProgressViewModel : ObservableObject
 {
     readonly UploadService _upload;
-    CancellationTokenSource _cts = new();
+    CancellationTokenSource? _cts;
 
     UploadStage _stage = UploadStage.Remuxing;
     double _progressPercent;
@@ -34,13 +34,26 @@ public class UploadProgressViewModel : ObservableObject
     public UploadProgressViewModel(UploadService upload)
     {
         _upload = upload;
-        CancelCommand = new RelayCommand(() => _cts.Cancel(), () => !IsDone && !IsError);
+        CancelCommand = new RelayCommand(() => _cts?.Cancel(), () => !IsDone && !IsError);
         CopyUrlCommand = new RelayCommand(CopyUrl, () => !string.IsNullOrEmpty(EmbedUrl));
     }
 
     public async Task StartUploadAsync(string filePath)
     {
         _cts = new CancellationTokenSource();
+        await StartUploadAsync(filePath, _cts);
+    }
+
+    public async Task StartUploadAsync(string filePath, CancellationTokenSource cts)
+    {
+        _cts = cts;
+        IsDone = false;
+        IsError = false;
+        UrlCopied = false;
+        EmbedUrl = string.Empty;
+        Stage = UploadStage.Remuxing;
+        ProgressPercent = 0;
+        StatusMessage = "Starting…";
 
         var progress = new Progress<UploadProgress>(p =>
         {

@@ -15,8 +15,22 @@ namespace BamboozClipStudio.Services;
 
 public class FFmpegService
 {
+    public enum FfmpegSource
+    {
+        Path,
+        LocalInstall,
+        DownloadedThisSession
+    }
+
+    public sealed record FfmpegSetupResult(FfmpegSource Source, string FfmpegPath, string FfprobePath);
+
     private static string _ffmpegExe = "ffmpeg";
     private static string _ffprobeExe = "ffprobe";
+
+    // Cached GPU encoder availability (probed once per session)
+    private static string? _cachedGpuEncoder;
+    private static string? _cachedGpuHevcEncoder;
+    private static bool _gpuProbed;
 
     private static readonly string LocalFfmpegDir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -37,14 +51,14 @@ public class FFmpegService
     // Ensure ffmpeg is available
     // ─────────────────────────────────────────────────────────────────────────
 
-    public async Task EnsureFfmpegAvailableAsync(IProgress<string>? progress)
+    public async Task<FfmpegSetupResult> EnsureFfmpegAvailableAsync(IProgress<string>? progress)
     {
         // 1. Try PATH first.
         if (IsOnPath("ffmpeg") && IsOnPath("ffprobe"))
         {
             _ffmpegExe = "ffmpeg";
             _ffprobeExe = "ffprobe";
-            return;
+            return new FfmpegSetupResult(FfmpegSource.Path, _ffmpegExe, _ffprobeExe);
         }
 
         // 2. Try local AppData install.
@@ -52,7 +66,7 @@ public class FFmpegService
         {
             _ffmpegExe = LocalFfmpegExe;
             _ffprobeExe = LocalFfprobeExe;
-            return;
+            return new FfmpegSetupResult(FfmpegSource.LocalInstall, _ffmpegExe, _ffprobeExe);
         }
 
         // 3. Download.
@@ -93,6 +107,7 @@ public class FFmpegService
         _ffmpegExe = LocalFfmpegExe;
         _ffprobeExe = LocalFfprobeExe;
         progress?.Report("FFmpeg installed successfully.");
+        return new FfmpegSetupResult(FfmpegSource.DownloadedThisSession, _ffmpegExe, _ffprobeExe);
     }
 
     private static bool IsOnPath(string executable)
@@ -212,11 +227,12 @@ public class FFmpegService
     // Extract single frame
     // ─────────────────────────────────────────────────────────────────────────
 
-    public async Task<BitmapImage> ExtractFrameAsync(string filePath, TimeSpan position, string? vfChain = null)
+    public async Task<BitmapImage> ExtractFrameAsync(string filePath, TimeSpan position, string? vfChain = null, bool hwAccel = false)
     {
         string posStr = FormatTimeSpan(position);
         string vfArg = string.IsNullOrEmpty(vfChain) ? "" : $"-vf \"{vfChain}\" ";
-        string args = $"-y -hide_banner -ss {posStr} -i \"{filePath}\" {vfArg}-frames:v 1 -f image2pipe -vcodec png pipe:1";
+        string hwArg = hwAccel ? "-hwaccel auto " : "";
+        string args = $"-y -hide_banner {hwArg}-ss {posStr} -i \"{filePath}\" {vfArg}-frames:v 1 -f image2pipe -vcodec png pipe:1";
 
         var psi = new ProcessStartInfo(_ffmpegExe, args)
         {
@@ -267,7 +283,8 @@ public class FFmpegService
             positions[i] = TimeSpan.FromSeconds(t);
         }
 
-        int degreeOfParallelism = Math.Max(1, Environment.ProcessorCount / 2);
+        // Cap at 3 parallel ffmpeg processes — too many causes I/O contention and UI starvation
+        int degreeOfParallelism = Math.Min(3, Math.Max(1, Environment.ProcessorCount / 4));
 
         await Task.Run(() =>
         {
@@ -289,6 +306,110 @@ public class FFmpegService
     }
 
     // ─────────────────────────────────────────────────────────────────────────
+    // GPU encoder detection
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Probes ffmpeg for available hardware encoders (NVENC, QSV, AMF).
+    /// Results are cached for the session.
+    /// </summary>
+    public async Task ProbeGpuEncodersAsync()
+    {
+        if (_gpuProbed) return;
+        _gpuProbed = true;
+
+        try
+        {
+            var (stdout, _) = await RunProcessAsync(_ffmpegExe, "-hide_banner -encoders").ConfigureAwait(false);
+
+            // Check H.264 GPU encoders in priority order: NVENC > QSV > AMF
+            string[] h264Encoders = ["h264_nvenc", "h264_qsv", "h264_amf"];
+            foreach (var enc in h264Encoders)
+            {
+                if (stdout.Contains(enc))
+                {
+                    _cachedGpuEncoder = enc;
+                    break;
+                }
+            }
+
+            // Check HEVC GPU encoders
+            string[] hevcEncoders = ["hevc_nvenc", "hevc_qsv", "hevc_amf"];
+            foreach (var enc in hevcEncoders)
+            {
+                if (stdout.Contains(enc))
+                {
+                    _cachedGpuHevcEncoder = enc;
+                    break;
+                }
+            }
+        }
+        catch { /* GPU detection failed — software fallback */ }
+    }
+
+    /// <summary>Returns the best available GPU H.264 encoder, or null if none.</summary>
+    public static string? GetGpuH264Encoder() => _cachedGpuEncoder;
+
+    /// <summary>Returns the best available GPU HEVC encoder, or null if none.</summary>
+    public static string? GetGpuHevcEncoder() => _cachedGpuHevcEncoder;
+
+    /// <summary>Maps a software codec to its GPU equivalent when HW accel is enabled.</summary>
+    public static string ResolveCodec(string softwareCodec, bool hwAccel)
+    {
+        if (!hwAccel) return softwareCodec;
+        return softwareCodec switch
+        {
+            "libx264" when _cachedGpuEncoder != null => _cachedGpuEncoder,
+            "libx265" when _cachedGpuHevcEncoder != null => _cachedGpuHevcEncoder,
+            _ => softwareCodec // VP9, or no GPU encoder available — stay software
+        };
+    }
+
+    /// <summary>Maps software presets to GPU-specific presets.</summary>
+    private static string ResolvePreset(string preset, string resolvedCodec)
+    {
+        if (resolvedCodec.Contains("nvenc"))
+        {
+            // NVENC presets: p1 (fastest) to p7 (slowest)
+            return preset switch
+            {
+                "ultrafast" => "p1",
+                "superfast" => "p2",
+                "fast"      => "p3",
+                "medium"    => "p4",
+                "slow"      => "p5",
+                "slower"    => "p6",
+                "veryslow"  => "p7",
+                _ => "p4"
+            };
+        }
+        if (resolvedCodec.Contains("qsv"))
+        {
+            return preset switch
+            {
+                "ultrafast" or "superfast" => "veryfast",
+                "veryslow" => "veryslow",
+                _ => preset // QSV supports most of the same preset names
+            };
+        }
+        if (resolvedCodec.Contains("amf"))
+        {
+            // AMF uses quality/speed/balanced
+            return preset switch
+            {
+                "ultrafast" or "superfast" or "fast" => "speed",
+                "slow" or "slower" or "veryslow" => "quality",
+                _ => "balanced"
+            };
+        }
+        return preset;
+    }
+
+    /// <summary>Whether the resolved codec is a GPU encoder.</summary>
+    private static bool IsGpuCodec(string codec) =>
+        codec.Contains("nvenc") || codec.Contains("qsv") || codec.Contains("amf");
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Build encode ProcessStartInfo
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -299,17 +420,35 @@ public class FFmpegService
         string inputPath,
         string outputPath,
         int audioTrackCount,
-        string? vfChain = null)
+        string? vfChain = null,
+        bool hwAccel = false)
     {
         var args = new System.Text.StringBuilder();
 
         args.Append($"-y -hide_banner");
+
+        // GPU-accelerated decoding
+        if (hwAccel)
+            args.Append(" -hwaccel auto");
+
         args.Append($" -ss {FormatTimeSpan(inPoint)}");
         args.Append($" -to {FormatTimeSpan(outPoint)}");
         args.Append($" -i \"{inputPath}\"");
-        args.Append($" -c:v {settings.VideoCodec}");
-        args.Append($" -preset {settings.Preset}");
-        args.Append($" -profile:v {settings.Profile}");
+
+        // Resolve codec: swap to GPU encoder when available
+        string resolvedCodec = ResolveCodec(settings.VideoCodec, hwAccel);
+        string resolvedPreset = ResolvePreset(settings.Preset, resolvedCodec);
+        bool isGpu = IsGpuCodec(resolvedCodec);
+
+        args.Append($" -c:v {resolvedCodec}");
+        args.Append($" -preset {resolvedPreset}");
+
+        // Profile — GPU encoders use different profile syntax
+        if (isGpu && resolvedCodec.Contains("nvenc"))
+            args.Append($" -profile:v {settings.Profile}"); // NVENC supports baseline/main/high
+        else if (!isGpu)
+            args.Append($" -profile:v {settings.Profile}");
+        // QSV/AMF: omit profile flag — let encoder auto-select
 
         // Audio mapping.
         if (settings.MixAudioTracks && audioTrackCount > 1)
@@ -329,11 +468,22 @@ public class FFmpegService
         args.Append($" -c:a {settings.AudioCodec}");
         args.Append(" -b:a 192k -ac 2 -threads 0");
 
-        // Rate control.
+        // Rate control — GPU encoders use different flags
         if (settings.BitrateMode == BitrateMode.Crf)
-            args.Append($" -crf {settings.Crf}");
+        {
+            if (isGpu && resolvedCodec.Contains("nvenc"))
+                args.Append($" -cq {settings.Crf} -rc vbr"); // NVENC: -cq + -rc vbr
+            else if (isGpu && resolvedCodec.Contains("qsv"))
+                args.Append($" -global_quality {settings.Crf}"); // QSV: -global_quality
+            else if (isGpu && resolvedCodec.Contains("amf"))
+                args.Append($" -qp_i {settings.Crf} -qp_p {settings.Crf} -rc cqp"); // AMF: fixed QP
+            else
+                args.Append($" -crf {settings.Crf}"); // Software
+        }
         else
+        {
             args.Append($" -b:v {settings.Bitrate}k");
+        }
 
         args.Append($" -movflags +faststart \"{outputPath}\"");
 
@@ -359,9 +509,10 @@ public class FFmpegService
         int audioTrackCount,
         TimeSpan duration,
         IProgress<double> progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        bool hwAccel = false)
     {
-        var psi = BuildEncodeProcessStartInfo(settings, inPoint, outPoint, inputPath, outputPath, audioTrackCount, vfChain);
+        var psi = BuildEncodeProcessStartInfo(settings, inPoint, outPoint, inputPath, outputPath, audioTrackCount, vfChain, hwAccel);
 
         using var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         process.Start();

@@ -6,52 +6,48 @@ Specialized Claude Code agents for each feature domain in Bambooz Clip Studio.
 
 ## Agent: Architecture Agent
 
-**Trigger:** Adding new views/sections, restructuring MVVM, changing navigation, cross-cutting concerns.
+**Trigger:** Adding new views/sections, restructuring MVVM, changing DI wiring, cross-cutting concerns.
 
 **Context file:** [`rules/architecture.md`](rules/architecture.md)
 
 **Scope:**
-- Adding View + ViewModel + nav entry
-- Changing DataTemplate/ContentControl system in `App.xaml`
-- Modifying `MainViewModel` navigation
+- `App.xaml.cs` (DI wiring, theme switching)
+- `MainWindow.xaml` / `.cs` (layout, LibVLC lifecycle, window bounds)
 - `Core/ObservableObject.cs`, `Core/RelayCommand.cs`
-
-**Prompt pattern:**
-> "Act as the Architecture Agent. I need to add a new [FeatureName] section."
+- `Converters/Converters.cs`
+- Adding new View + ViewModel pairs
 
 ---
 
 ## Agent: Timeline Agent
 
-**Trigger:** Any work on the video timeline — playback, in/out trimming, zoom, ruler, drag handles.
+**Trigger:** Any work on the video timeline — playback, in/out trimming, zoom, ruler, drag handles, hover preview, volume, transport controls.
 
 **Context file:** [`rules/timeline.md`](rules/timeline.md)
 
 **Scope:**
-- `Views/TimelineView.xaml`
+- `Views/TimelineView.xaml` / `.cs`
 - `ViewModels/TimelineViewModel.cs`
-- `Services/FFmpegService.cs` (seek/preview frames)
-- Drag handle logic, zoom scroll, playback timer
+- `MainWindow.xaml.cs` (VLC ↔ VM sync, position timer, keyboard shortcuts)
+- `Services/FFmpegService.cs` (frame extraction, thumbnails)
 
-**Prompt pattern:**
-> "Act as the Timeline Agent. I need to implement [trim handles / zoom / playback]."
+**Key concerns:** VLC threading (BeginInvoke), pause position sync, _syncingFromMedia guard, snap-to-seconds, hover tooltip
 
 ---
 
 ## Agent: Export Agent
 
-**Trigger:** Export dialog, FFmpeg encode settings, format/codec/bitrate options, file size estimation.
+**Trigger:** Export dialog, FFmpeg encode settings, format/codec/bitrate options, GPU acceleration, file size estimation.
 
 **Context file:** [`rules/export.md`](rules/export.md)
 
 **Scope:**
 - `Views/ExportDialog.xaml`
 - `ViewModels/ExportViewModel.cs`
-- `Services/FFmpegService.cs` (encode path)
+- `Services/FFmpegService.cs` (BuildEncodeProcessStartInfo, EncodeAsync, GPU detection)
 - `Models/ExportSettings.cs`
 
-**Prompt pattern:**
-> "Act as the Export Agent. I need to add [format option / bitrate control / size estimation]."
+**Key concerns:** GPU encoder auto-detection/substitution, preset/rate-control mapping, ExportCompleted event
 
 ---
 
@@ -65,16 +61,12 @@ Specialized Claude Code agents for each feature domain in Bambooz Clip Studio.
 - `Services/UploadService.cs`
 - `Views/UploadProgressDialog.xaml`
 - `ViewModels/UploadProgressViewModel.cs`
-- `ProgressableStreamContent` helper
-
-**Prompt pattern:**
-> "Act as the Upload Agent. I need to [add upload progress / fix catbox POST / change embed URL format]."
 
 ---
 
 ## Agent: Filters Agent
 
-**Trigger:** Color/visual filters, FFmpeg vf chain building, filter preset UI.
+**Trigger:** Color/visual filters, FFmpeg vf chain building, filter UI, filter persistence.
 
 **Context file:** [`rules/filters.md`](rules/filters.md)
 
@@ -83,26 +75,26 @@ Specialized Claude Code agents for each feature domain in Bambooz Clip Studio.
 - `Views/FiltersPanel.xaml`
 - `ViewModels/FiltersViewModel.cs`
 - `Models/FilterPreset.cs`
+- `MainViewModel.cs` (filter persistence to AppSettings, preview frame extraction)
 
-**Prompt pattern:**
-> "Act as the Filters Agent. I need to add [vibrance / saturation / color grading] filter support."
+**Key concerns:** Vibrance not yet wired, InvariantCulture formatting, preview via FFmpeg (not VLC), airspace workaround
 
 ---
 
 ## Agent: UI/Theme Agent
 
-**Trigger:** Styling, theming, XAML layout, dark/light mode, scrollbar/dropdown styles, color palette.
+**Trigger:** Styling, theming, XAML layout, theme switching, new themes, control templates.
 
 **Context file:** [`rules/ui-theming.md`](rules/ui-theming.md)
 
 **Scope:**
-- `Theme/UIColors.xaml`, `Theme/UIStyles.xaml`
-- `MainWindow.xaml` toolbar and layout
-- Dark/light auto-detection logic
-- All custom control templates (scrollbars, dropdowns, buttons)
+- `Theme/UIColors*.xaml` (10 theme files), `Theme/UIStyles.xaml`
+- `App.xaml` (resource dictionary merging, converter registration)
+- `App.xaml.cs` (`ApplyTheme` switch)
+- `MainWindow.xaml` (toolbar, layout)
+- `MainViewModel.cs` (ThemeMode* properties, SetTheme)
 
-**Prompt pattern:**
-> "Act as the UI/Theme Agent. I need to style [component] consistently with the app."
+**Key concerns:** DynamicResource required for live switching, all 10 themes must stay consistent
 
 ---
 
@@ -114,28 +106,21 @@ Specialized Claude Code agents for each feature domain in Bambooz Clip Studio.
 
 **Scope:**
 - `Services/UpdateService.cs`
-- `Views/UpdateDialog.xaml`
-- Toolbar menu items for update toggle + manual check
-- GitHub API call, version comparison, installer download + launch
-
-**Prompt pattern:**
-> "Act as the Update Agent. I need to implement [auto-check on startup / manual check button / installer download]."
+- Toolbar menu items (AutoCheckUpdates toggle, manual check button)
+- `MainViewModel.cs` (CheckUpdatesAsync, update download progress)
 
 ---
 
 ## Agent: Installer Agent
 
-**Trigger:** Building the distributable installer, Inno Setup script, publish pipeline, GitHub Release packaging.
+**Trigger:** Building the distributable installer, Inno Setup script, publish pipeline.
 
 **Context file:** [`rules/installer.md`](rules/installer.md)
 
 **Scope:**
 - `Installer/BamboozClipStudio.iss`
 - `.csproj` publish settings
-- GitHub Release asset upload workflow
-
-**Prompt pattern:**
-> "Act as the Installer Agent. I need to [set up the Inno Setup script / add a new file to the install / configure the publish profile]."
+- GitHub Release asset upload
 
 ---
 

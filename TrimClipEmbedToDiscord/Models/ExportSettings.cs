@@ -17,6 +17,7 @@ public class ExportSettings : ObservableObject
     string _profile = "high";
     bool _mixAudioTracks = true;
     bool _embedUpload;
+    bool _hardwareAcceleration = true;
 
     public string OutputFolder   { get => _outputFolder;   set => SetProperty(ref _outputFolder,   value); }
     public string Container      { get => _container;      set => SetProperty(ref _container,      value); }
@@ -29,4 +30,5 @@ public class ExportSettings : ObservableObject
     public string Profile        { get => _profile;        set => SetProperty(ref _profile,        value); }
     public bool MixAudioTracks   { get => _mixAudioTracks; set => SetProperty(ref _mixAudioTracks, value); }
     public bool EmbedUpload      { get => _embedUpload;    set => SetProperty(ref _embedUpload,    value); }
+    public bool HardwareAcceleration { get => _hardwareAcceleration; set => SetProperty(ref _hardwareAcceleration, value); }
 }
